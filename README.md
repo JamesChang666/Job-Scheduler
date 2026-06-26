@@ -23,6 +23,7 @@ python scheduler_ui.py
    - `Every` seconds/minutes/hours
    - `Run once`
 7. Choose `Schedule Time Zone`, such as `Pacific/Auckland`, `Asia/Taipei`, or `America/New_York`.
+   - Use `Reset` to return to the default timezone.
 8. Optional: set `End Time` to stop a repeating job after a date/time.
 9. Click `Save`.
 10. Use `Run Now` to test immediately.

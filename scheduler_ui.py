@@ -498,9 +498,12 @@ class JobDialog(Toplevel):
         timezone_frame = Frame(container)
         timezone_frame.pack(fill=BOTH, pady=(10, 0))
         Label(timezone_frame, text="Schedule Time Zone").pack(anchor="w")
-        ttk.Combobox(timezone_frame, textvariable=self.timezone_var, values=TIME_ZONES, state="readonly").pack(
-            fill=BOTH, expand=True, pady=(4, 0)
+        timezone_input = Frame(timezone_frame)
+        timezone_input.pack(fill=BOTH, expand=True, pady=(4, 0))
+        ttk.Combobox(timezone_input, textvariable=self.timezone_var, values=TIME_ZONES, state="readonly").pack(
+            side=LEFT, fill=BOTH, expand=True
         )
+        Button(timezone_input, text="Reset", command=self._reset_timezone).pack(side=RIGHT, padx=(8, 0))
 
         end_frame = Frame(container)
         end_frame.pack(fill=BOTH, pady=(10, 0))
@@ -547,6 +550,9 @@ class JobDialog(Toplevel):
         selected = filedialog.askdirectory(parent=self, title="Choose Working Directory")
         if selected:
             self.working_dir_var.set(selected)
+
+    def _reset_timezone(self) -> None:
+        self.timezone_var.set(DEFAULT_TIME_ZONE)
 
     def _save(self) -> None:
         name = self.name_var.get().strip()
