@@ -6,6 +6,7 @@ python -m PyInstaller `
     --clean `
     --onefile `
     --windowed `
+    --icon jcschedular.ico `
     --name JobScheduler `
     scheduler_ui.py
 
