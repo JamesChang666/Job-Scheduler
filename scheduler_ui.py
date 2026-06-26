@@ -641,6 +641,7 @@ class SchedulerApp:
 
         self.selected_job_id: str | None = None
         self.status_var = StringVar(value=self._agent_status_text())
+        self.startup_var = BooleanVar(value=is_startup_enabled())
 
         self._build_ui()
         self._refresh_jobs()
@@ -653,7 +654,6 @@ class SchedulerApp:
         file_menu = Menu(menubar, tearoff=False)
         file_menu.add_command(label="Open Logs Folder", command=self._open_logs_dir)
         file_menu.add_command(label="Start Background Agent", command=self._start_agent_clicked)
-        file_menu.add_command(label="Install Startup Task", command=self._install_startup_task)
         file_menu.add_command(label="Reload", command=self._reload)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self._on_close)
@@ -673,6 +673,9 @@ class SchedulerApp:
         Button(toolbar, text="Delete", command=self._delete_job).pack(side=LEFT, padx=(8, 0))
         Button(toolbar, text="Run Now", command=self._run_selected_now).pack(side=LEFT, padx=(18, 0))
         Button(toolbar, text="Enable / Disable", command=self._toggle_selected).pack(side=LEFT, padx=(8, 0))
+        Checkbutton(toolbar, text="Start with Windows", variable=self.startup_var, command=self._toggle_startup).pack(
+            side=LEFT, padx=(18, 0)
+        )
 
         body = Frame(self.root, padx=14, pady=12)
         body.grid(row=2, column=0, sticky="nsew")
@@ -912,9 +915,13 @@ class SchedulerApp:
         start_background_agent()
         self.status_var.set(self._agent_status_text())
 
-    def _install_startup_task(self) -> None:
-        install_startup_launcher()
-        messagebox.showinfo("Startup", "Startup launcher installed. The background agent will start when you log in.")
+    def _toggle_startup(self) -> None:
+        if self.startup_var.get():
+            install_startup_launcher()
+            self.status_var.set("Startup enabled. Agent will start after Windows login.")
+        else:
+            remove_startup_launcher()
+            self.status_var.set("Startup disabled.")
 
     def _on_close(self) -> None:
         self.scheduler.stop()
@@ -1001,10 +1008,18 @@ def start_background_agent() -> bool:
     return True
 
 
-def install_startup_launcher() -> Path:
+def startup_launcher_path() -> Path:
     startup_dir = Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-    startup_dir.mkdir(parents=True, exist_ok=True)
-    launcher = startup_dir / "PythonExeSchedulerAgent.cmd"
+    return startup_dir / "PythonExeSchedulerAgent.cmd"
+
+
+def is_startup_enabled() -> bool:
+    return startup_launcher_path().exists()
+
+
+def install_startup_launcher() -> Path:
+    launcher = startup_launcher_path()
+    launcher.parent.mkdir(parents=True, exist_ok=True)
 
     if getattr(sys, "frozen", False):
         command = f'"{sys.executable}" --agent'
@@ -1025,6 +1040,13 @@ def install_startup_launcher() -> Path:
 
     launcher.write_text(f"@echo off\r\n{command}\r\n", encoding="ascii")
     return launcher
+
+
+def remove_startup_launcher() -> None:
+    try:
+        startup_launcher_path().unlink()
+    except FileNotFoundError:
+        pass
 
 
 def calculate_next_run(job: Job, now: datetime) -> datetime:

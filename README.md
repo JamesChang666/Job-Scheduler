@@ -30,6 +30,7 @@ python scheduler_ui.py
 11. Check `logs/` and the right-side details panel for results.
 
 The UI starts the background agent automatically. You can close the UI and the background agent keeps running.
+Use `Start with Windows` in the toolbar to make the hidden agent start after Windows login.
 
 ## Install Background Startup
 
@@ -40,6 +41,8 @@ powershell.exe -ExecutionPolicy Bypass -File .\install_startup_folder.ps1
 ```
 
 This installs a Startup folder launcher so the background agent starts when you log in after reboot.
+
+You can also enable or disable this directly in the UI with the `Start with Windows` checkbox.
 
 ## Remove Background Startup
 
