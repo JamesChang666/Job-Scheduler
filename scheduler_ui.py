@@ -160,6 +160,7 @@ class Job:
     end_at: str = ""
     schedule_time: str = "09:00:00"
     weekday: int = 0
+    weekdays: list[int] = field(default_factory=lambda: [0])
     month_day: int = 1
     timezone: str = DEFAULT_TIME_ZONE
     working_dir: str = ""
@@ -225,6 +226,7 @@ class JobStore:
         clean.setdefault("end_at", item.get("end_at", ""))
         clean.setdefault("schedule_time", "09:00:00")
         clean.setdefault("weekday", 0)
+        clean.setdefault("weekdays", item.get("weekdays", [clean.get("weekday", 0)]))
         clean.setdefault("month_day", 1)
         clean.setdefault("timezone", item.get("timezone", DEFAULT_TIME_ZONE))
         clean.setdefault("working_dir", item.get("working_dir", ""))
@@ -434,7 +436,8 @@ class JobDialog(Toplevel):
         self.run_at_var = StringVar(value=job.run_at if job and job.run_at else datetime.now().strftime(TIME_FORMAT))
         self.end_at_var = StringVar(value=job.end_at if job else "")
         self.time_var = StringVar(value=job.schedule_time if job else "09:00:00")
-        self.weekday_var = StringVar(value=WEEKDAYS[job.weekday] if job else WEEKDAYS[0])
+        selected_weekdays = normalize_weekdays(job.weekdays if job else [0])
+        self.weekday_vars = [BooleanVar(value=index in selected_weekdays) for index in range(7)]
         self.month_day_var = StringVar(value=str(job.month_day if job else 1))
         self.timezone_var = StringVar(value=job.timezone if job else DEFAULT_TIME_ZONE)
         self.working_dir_var = StringVar(value=job.working_dir if job else "")
@@ -466,33 +469,34 @@ class JobDialog(Toplevel):
         schedule_box.columnconfigure(3, weight=1)
 
         Radiobutton(schedule_box, text="Weekly", variable=self.mode_var, value="weekly").grid(row=0, column=0, sticky="w")
-        ttk.Combobox(schedule_box, textvariable=self.weekday_var, values=WEEKDAYS, width=8, state="readonly").grid(
-            row=0, column=1, padx=(8, 6), sticky="w"
-        )
-        Label(schedule_box, text="Time").grid(row=0, column=2, sticky="w")
-        Entry(schedule_box, textvariable=self.time_var, width=8).grid(row=0, column=3, padx=(6, 0), sticky="w")
+        weekdays_frame = Frame(schedule_box)
+        weekdays_frame.grid(row=0, column=1, columnspan=3, sticky="w", padx=(8, 0))
+        for index, day in enumerate(WEEKDAYS):
+            Checkbutton(weekdays_frame, text=day[:3], variable=self.weekday_vars[index]).pack(side=LEFT)
+        Label(schedule_box, text="Time").grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        Entry(schedule_box, textvariable=self.time_var, width=10).grid(row=1, column=2, padx=(6, 0), sticky="w", pady=(8, 0))
 
-        Radiobutton(schedule_box, text="Monthly", variable=self.mode_var, value="monthly").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        Radiobutton(schedule_box, text="Monthly", variable=self.mode_var, value="monthly").grid(row=2, column=0, sticky="w", pady=(8, 0))
         Spinbox(schedule_box, from_=1, to=31, textvariable=self.month_day_var, width=6).grid(
-            row=1, column=1, padx=(8, 6), sticky="w", pady=(8, 0)
+            row=2, column=1, padx=(8, 6), sticky="w", pady=(8, 0)
         )
-        Label(schedule_box, text="day, at").grid(row=1, column=2, sticky="w", pady=(8, 0))
-        Entry(schedule_box, textvariable=self.time_var, width=8).grid(row=1, column=3, padx=(6, 0), sticky="w", pady=(8, 0))
+        Label(schedule_box, text="day, at").grid(row=2, column=2, sticky="w", pady=(8, 0))
+        Entry(schedule_box, textvariable=self.time_var, width=10).grid(row=2, column=3, padx=(6, 0), sticky="w", pady=(8, 0))
 
         Radiobutton(schedule_box, text="Every", variable=self.mode_var, value="interval").grid(
-            row=2, column=0, sticky="w", pady=(8, 0)
+            row=3, column=0, sticky="w", pady=(8, 0)
         )
-        Entry(schedule_box, textvariable=self.interval_var, width=8).grid(row=2, column=1, padx=(8, 6), sticky="w", pady=(8, 0))
+        Entry(schedule_box, textvariable=self.interval_var, width=8).grid(row=3, column=1, padx=(8, 6), sticky="w", pady=(8, 0))
         ttk.Combobox(schedule_box, textvariable=self.interval_unit_var, values=INTERVAL_UNITS, width=8, state="readonly").grid(
-            row=2, column=2, sticky="w", pady=(8, 0)
+            row=3, column=2, sticky="w", pady=(8, 0)
         )
 
         Radiobutton(schedule_box, text="Run once", variable=self.mode_var, value="once").grid(
-            row=3, column=0, sticky="w", pady=(8, 0)
+            row=4, column=0, sticky="w", pady=(8, 0)
         )
-        Entry(schedule_box, textvariable=self.run_at_var, width=18).grid(row=3, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        Entry(schedule_box, textvariable=self.run_at_var, width=18).grid(row=4, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         Label(schedule_box, text="Time format: HH:MM:SS; one-time format: YYYY-MM-DD HH:MM:SS").grid(
-            row=4, column=1, columnspan=3, sticky="w", pady=(4, 0)
+            row=5, column=1, columnspan=3, sticky="w", pady=(4, 0)
         )
 
         timezone_frame = Frame(container)
@@ -579,6 +583,10 @@ class JobDialog(Toplevel):
         if mode in {"weekly", "monthly"} and not parse_clock(self.time_var.get().strip()):
             messagebox.showerror("Invalid Time Format", "Weekly and monthly schedules must use HH:MM:SS.", parent=self)
             return
+        selected_weekdays = [index for index, var in enumerate(self.weekday_vars) if var.get()]
+        if mode == "weekly" and not selected_weekdays:
+            messagebox.showerror("Missing Weekday", "Select at least one weekday for weekly schedules.", parent=self)
+            return
         end_at = self.end_at_var.get().strip()
         if end_at and not parse_datetime(end_at):
             messagebox.showerror("Invalid End Time", f"End time must use {TIME_FORMAT}.", parent=self)
@@ -605,7 +613,8 @@ class JobDialog(Toplevel):
             run_at=self.run_at_var.get().strip(),
             end_at=end_at,
             schedule_time=self.time_var.get().strip(),
-            weekday=WEEKDAYS.index(self.weekday_var.get()),
+            weekday=selected_weekdays[0] if selected_weekdays else 0,
+            weekdays=selected_weekdays or [0],
             month_day=month_day,
             timezone=self.timezone_var.get() or DEFAULT_TIME_ZONE,
             working_dir=self.working_dir_var.get().strip(),
@@ -1058,25 +1067,28 @@ def calculate_next_run(job: Job, now: datetime) -> datetime:
         candidate = now + interval
         return candidate.replace(microsecond=0)
     if job.mode == "weekly":
-        return next_weekly_run_for_zone(job.weekday, job.schedule_time, now, job.timezone)
+        return next_weekly_run_for_zone(normalize_weekdays(job.weekdays), job.schedule_time, now, job.timezone)
     if job.mode == "monthly":
         return next_monthly_run_for_zone(job.month_day, job.schedule_time, now, job.timezone)
     return now
 
 
 def next_weekly_run(weekday: int, clock_text: str, now: datetime) -> datetime:
-    return next_weekly_run_for_zone(weekday, clock_text, now, DEFAULT_TIME_ZONE)
+    return next_weekly_run_for_zone([weekday], clock_text, now, DEFAULT_TIME_ZONE)
 
 
-def next_weekly_run_for_zone(weekday: int, clock_text: str, now: datetime, timezone_name: str) -> datetime:
+def next_weekly_run_for_zone(weekdays: list[int], clock_text: str, now: datetime, timezone_name: str) -> datetime:
     zone = get_zone(timezone_name)
     zone_now = local_naive_to_aware(now).astimezone(zone)
     hour, minute, second = parse_clock(clock_text) or (9, 0, 0)
-    days_ahead = (weekday - zone_now.weekday()) % 7
-    candidate = (zone_now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=second, microsecond=0)
-    if candidate <= zone_now:
-        candidate += timedelta(days=7)
-    return aware_to_local_naive(candidate)
+    candidates = []
+    for weekday in normalize_weekdays(weekdays):
+        days_ahead = (weekday - zone_now.weekday()) % 7
+        candidate = (zone_now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=second, microsecond=0)
+        if candidate <= zone_now:
+            candidate += timedelta(days=7)
+        candidates.append(candidate)
+    return aware_to_local_naive(min(candidates))
 
 
 def next_monthly_run(month_day: int, clock_text: str, now: datetime) -> datetime:
@@ -1104,7 +1116,8 @@ def next_monthly_run_for_zone(month_day: int, clock_text: str, now: datetime, ti
 
 def describe_schedule(job: Job) -> str:
     if job.mode == "weekly":
-        return f"Weekly on {WEEKDAYS[job.weekday]} at {job.schedule_time} ({job.timezone})"
+        days = ", ".join(WEEKDAYS[index][:3] for index in normalize_weekdays(job.weekdays))
+        return f"Weekly on {days} at {job.schedule_time} ({job.timezone})"
     if job.mode == "monthly":
         return f"Monthly on day {job.month_day} at {job.schedule_time} ({job.timezone})"
     if job.mode == "interval":
@@ -1178,6 +1191,15 @@ def build_interval_delta(job: Job) -> timedelta:
     if unit == "hours":
         return timedelta(hours=amount)
     return timedelta(minutes=amount)
+
+
+def normalize_weekdays(values) -> list[int]:
+    if values is None:
+        return [0]
+    if isinstance(values, int):
+        values = [values]
+    cleaned = sorted({int(value) for value in values if 0 <= int(value) <= 6})
+    return cleaned or [0]
 
 
 def guess_python_file(command: str) -> str:

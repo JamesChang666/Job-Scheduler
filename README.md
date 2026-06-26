@@ -18,7 +18,7 @@ python scheduler_ui.py
 4. Choose `Run As`: `Python` for `.py`, `EXE` for `.exe`.
 5. Optional: add arguments and a working directory.
 6. Choose a schedule:
-   - `Weekly`
+   - `Weekly` with one or more weekdays
    - `Monthly`
    - `Every` seconds/minutes/hours
    - `Run once`
@@ -78,7 +78,7 @@ The same EXE can run the hidden background agent:
 
 ## Schedule Options
 
-- `Weekly`: choose a weekday and time, such as Monday at `09:00:30`.
+- `Weekly`: choose one or more weekdays and a time, such as Monday/Wednesday/Friday at `09:00:30`.
 - `Monthly`: choose a day of the month and time, such as day 5 at `18:30:15`.
 - `Every`: run at a fixed interval in seconds, minutes, or hours.
 - `Run once`: use `YYYY-MM-DD HH:MM:SS`; the job disables itself after it runs.
