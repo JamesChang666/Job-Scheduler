@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+
+jobs.json
+logs/
+scheduler_agent.pid
+test_scheduled_job_output.txt
+
+.venv/
+venv/
+env/
+
+install_cronicle_inside_wsl.sh
+install_wsl_for_cronicle.ps1
+start_cronicle_wsl.ps1
