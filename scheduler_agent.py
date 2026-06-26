@@ -2,7 +2,7 @@ import os
 import subprocess
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from scheduler_ui import (
@@ -22,18 +22,22 @@ from scheduler_ui import (
 
 
 POLL_SECONDS = 1
+LOG_RETENTION_DAYS = 31
+LOG_CLEANUP_INTERVAL_SECONDS = 6 * 60 * 60
 
 
 class BackgroundScheduler:
     def __init__(self):
         self.active_jobs: set[str] = set()
         self.lock = threading.Lock()
+        self.last_log_cleanup = 0.0
 
     def run_forever(self) -> None:
         AGENT_PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
         try:
             while True:
                 self.tick()
+                self.cleanup_old_logs()
                 time.sleep(POLL_SECONDS)
         finally:
             try:
@@ -153,6 +157,24 @@ class BackgroundScheduler:
     def log_path(self, job: Job, started: datetime) -> Path:
         name = safe_filename(job.name)
         return LOG_DIR / f"{started.strftime('%Y%m%d_%H%M%S')}_{name}.log"
+
+    def cleanup_old_logs(self) -> None:
+        now = time.time()
+        if now - self.last_log_cleanup < LOG_CLEANUP_INTERVAL_SECONDS:
+            return
+
+        self.last_log_cleanup = now
+        cutoff = datetime.now() - timedelta(days=LOG_RETENTION_DAYS)
+        if not LOG_DIR.exists():
+            return
+
+        for log_file in LOG_DIR.glob("*.log"):
+            try:
+                modified = datetime.fromtimestamp(log_file.stat().st_mtime)
+                if modified < cutoff:
+                    log_file.unlink()
+            except OSError:
+                continue
 
 
 def main() -> None:

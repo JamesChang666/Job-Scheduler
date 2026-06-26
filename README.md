@@ -104,6 +104,7 @@ The same EXE can run the hidden background agent:
 - Background agent keeps schedules running after the UI closes.
 - Startup launcher can relaunch the background agent after reboot/login.
 - Execution output is saved in `logs/`.
+- Log files older than 31 days are automatically deleted by the background agent.
 - Job settings are saved in `jobs.json`.
 
 ## Notes
