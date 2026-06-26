@@ -9,7 +9,7 @@ import sys
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 from pathlib import Path
 from tkinter import (
     BOTH,
@@ -41,7 +41,7 @@ from tkinter import (
     messagebox,
     ttk,
 )
-from zoneinfo import ZoneInfo, available_timezones
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 
 APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
@@ -1141,8 +1141,11 @@ def parse_datetime(value: str) -> datetime | None:
 def get_zone(timezone_name: str) -> ZoneInfo:
     try:
         return ZoneInfo(timezone_name)
-    except Exception:
-        return ZoneInfo(DEFAULT_TIME_ZONE)
+    except ZoneInfoNotFoundError:
+        try:
+            return ZoneInfo(DEFAULT_TIME_ZONE)
+        except ZoneInfoNotFoundError:
+            return datetime.now().astimezone().tzinfo or datetime_timezone.utc
 
 
 def local_naive_to_aware(value: datetime) -> datetime:

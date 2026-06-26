@@ -10,6 +10,14 @@ The UI is only the controller. A separate background agent runs the schedules, s
 python scheduler_ui.py
 ```
 
+When running from source on Windows, install dependencies first:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+This installs `tzdata`, which gives Python full timezone support on Windows.
+
 ## How To Use
 
 1. Open the UI.
