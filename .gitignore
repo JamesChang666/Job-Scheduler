@@ -10,6 +10,10 @@ test_scheduled_job_output.txt
 venv/
 env/
 
+build/
+dist/
+*.spec
+
 install_cronicle_inside_wsl.sh
 install_wsl_for_cronicle.ps1
 start_cronicle_wsl.ps1

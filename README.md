@@ -10,26 +10,65 @@ The UI is only the controller. A separate background agent runs the schedules, s
 python scheduler_ui.py
 ```
 
+## How To Use
+
+1. Open the UI.
+2. Click `New`.
+3. Choose a Python `.py` file or Windows `.exe` file.
+4. Choose `Run As`: `Python` for `.py`, `EXE` for `.exe`.
+5. Optional: add arguments and a working directory.
+6. Choose a schedule:
+   - `Weekly`
+   - `Monthly`
+   - `Every` seconds/minutes/hours
+   - `Run once`
+7. Optional: set `End Time` to stop a repeating job after a date/time.
+8. Click `Save`.
+9. Use `Run Now` to test immediately.
+10. Check `logs/` and the right-side details panel for results.
+
+The UI starts the background agent automatically. You can close the UI and the background agent keeps running.
+
 ## Install Background Startup
 
 From PowerShell:
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\install_scheduler_startup.ps1
+powershell.exe -ExecutionPolicy Bypass -File .\install_startup_folder.ps1
 ```
 
-This creates a Windows Task Scheduler entry named:
-
-```text
-PythonExeSchedulerAgent
-```
-
-It starts `scheduler_agent.py` when you log in.
+This installs a Startup folder launcher so the background agent starts when you log in after reboot.
 
 ## Remove Background Startup
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\uninstall_scheduler_startup.ps1
+powershell.exe -ExecutionPolicy Bypass -File .\uninstall_startup_folder.ps1
+```
+
+## Build One-File EXE
+
+PyInstaller is used to package the app:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\build_exe.ps1
+```
+
+Output:
+
+```text
+dist\JobScheduler.exe
+```
+
+Run it normally to open the UI:
+
+```powershell
+.\dist\JobScheduler.exe
+```
+
+The same EXE can run the hidden background agent:
+
+```powershell
+.\dist\JobScheduler.exe --agent
 ```
 
 ## Schedule Options
@@ -47,7 +86,7 @@ powershell.exe -ExecutionPolicy Bypass -File .\uninstall_scheduler_startup.ps1
 - Set a working directory; blank uses the selected file folder.
 - Run now, enable, disable, edit, and delete jobs.
 - Background agent keeps schedules running after the UI closes.
-- Startup task can relaunch the background agent after reboot/login.
+- Startup launcher can relaunch the background agent after reboot/login.
 - Execution output is saved in `logs/`.
 - Job settings are saved in `jobs.json`.
 

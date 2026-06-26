@@ -2,6 +2,7 @@ import calendar
 import json
 import os
 import queue
+import shutil
 import shlex
 import subprocess
 import sys
@@ -41,7 +42,7 @@ from tkinter import (
 )
 
 
-APP_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 DATA_FILE = APP_DIR / "jobs.json"
 LOG_DIR = APP_DIR / "logs"
 AGENT_PID_FILE = APP_DIR / "scheduler_agent.pid"
@@ -743,23 +744,8 @@ class SchedulerApp:
         self.status_var.set(self._agent_status_text())
 
     def _install_startup_task(self) -> None:
-        script = APP_DIR / "install_scheduler_startup.ps1"
-        result = subprocess.run(
-            [
-                "powershell.exe",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                str(script),
-            ],
-            cwd=str(APP_DIR),
-            text=True,
-            capture_output=True,
-        )
-        if result.returncode == 0:
-            messagebox.showinfo("Startup Task", "Startup task installed. The background agent will start when you log in.")
-        else:
-            messagebox.showerror("Startup Task", result.stderr or result.stdout or "Failed to install startup task.")
+        install_startup_launcher()
+        messagebox.showinfo("Startup", "Startup launcher installed. The background agent will start when you log in.")
 
     def _on_close(self) -> None:
         self.scheduler.stop()
@@ -787,6 +773,16 @@ def build_display_command(job: Job) -> str:
 
 
 def python_console_executable() -> str:
+    if getattr(sys, "frozen", False):
+        candidates = [
+            shutil.which("python.exe"),
+            shutil.which("python"),
+            r"C:\Users\james\AppData\Local\Programs\Python\Python312\python.exe",
+        ]
+        for candidate in candidates:
+            if candidate and Path(candidate).exists():
+                return candidate
+
     executable = Path(sys.executable)
     if executable.name.lower() == "pythonw.exe":
         python_exe = executable.with_name("python.exe")
@@ -818,17 +814,48 @@ def start_background_agent() -> bool:
     if pid and is_pid_running(pid):
         return False
 
-    agent_path = APP_DIR / "scheduler_agent.py"
-    pythonw = Path(sys.executable).with_name("pythonw.exe")
-    launcher = str(pythonw if pythonw.exists() else sys.executable)
+    if getattr(sys, "frozen", False):
+        command = [sys.executable, "--agent"]
+        launcher = sys.executable
+    else:
+        agent_path = APP_DIR / "scheduler_agent.py"
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        launcher = str(pythonw if pythonw.exists() else sys.executable)
+        command = [launcher, str(agent_path)]
     subprocess.Popen(
-        [launcher, str(agent_path)],
+        command,
         cwd=str(APP_DIR),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
     )
     return True
+
+
+def install_startup_launcher() -> Path:
+    startup_dir = Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    startup_dir.mkdir(parents=True, exist_ok=True)
+    launcher = startup_dir / "PythonExeSchedulerAgent.cmd"
+
+    if getattr(sys, "frozen", False):
+        command = f'"{sys.executable}" --agent'
+    else:
+        app_dir = str(APP_DIR)
+        helper_dir = Path.home() / "AppData" / "Local" / "PythonExeScheduler"
+        helper_dir.mkdir(parents=True, exist_ok=True)
+        helper = helper_dir / "start_agent.ps1"
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        agent_python = str(pythonw if pythonw.exists() else sys.executable)
+        agent_path = str(APP_DIR / "scheduler_agent.py")
+        helper.write_text(
+            f'$ErrorActionPreference = "Stop"\n'
+            f'Start-Process -FilePath "{agent_python}" -ArgumentList \'"{agent_path}"\' -WorkingDirectory "{app_dir}" -WindowStyle Hidden\n',
+            encoding="utf-8",
+        )
+        command = f'powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File "{helper}"'
+
+    launcher.write_text(f"@echo off\r\n{command}\r\n", encoding="ascii")
+    return launcher
 
 
 def calculate_next_run(job: Job, now: datetime) -> datetime:
@@ -936,6 +963,12 @@ def safe_filename(value: str) -> str:
 
 
 def main() -> None:
+    if "--agent" in sys.argv:
+        from scheduler_agent import BackgroundScheduler
+
+        BackgroundScheduler().run_forever()
+        return
+
     root = Tk()
     SchedulerApp(root)
     root.mainloop()
