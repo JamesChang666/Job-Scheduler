@@ -22,10 +22,11 @@ python scheduler_ui.py
    - `Monthly`
    - `Every` seconds/minutes/hours
    - `Run once`
-7. Optional: set `End Time` to stop a repeating job after a date/time.
-8. Click `Save`.
-9. Use `Run Now` to test immediately.
-10. Check `logs/` and the right-side details panel for results.
+7. Choose `Schedule Time Zone`, such as `Pacific/Auckland`, `Asia/Taipei`, or `America/New_York`.
+8. Optional: set `End Time` to stop a repeating job after a date/time.
+9. Click `Save`.
+10. Use `Run Now` to test immediately.
+11. Check `logs/` and the right-side details panel for results.
 
 The UI starts the background agent automatically. You can close the UI and the background agent keeps running.
 
@@ -77,14 +78,17 @@ The same EXE can run the hidden background agent:
 - `Monthly`: choose a day of the month and time, such as day 5 at `18:30`.
 - `Every`: run at a fixed interval in seconds, minutes, or hours.
 - `Run once`: use `YYYY-MM-DD HH:MM:SS`; the job disables itself after it runs.
+- `Schedule Time Zone`: weekly, monthly, run-once, and end-time fields are interpreted in the selected timezone.
 
 ## Features
 
 - Choose a Python `.py` file or Windows `.exe` file.
 - Add optional arguments.
 - Add an optional end time so repeating jobs stop after a date/time.
+- Select an IANA timezone for country/region-specific schedule times.
 - Set a working directory; blank uses the selected file folder.
 - Run now, enable, disable, edit, and delete jobs.
+- Scrollbars are available for the job table, job details, logs, and job editor.
 - Background agent keeps schedules running after the UI closes.
 - Startup launcher can relaunch the background agent after reboot/login.
 - Execution output is saved in `logs/`.

@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import (
     BOTH,
+    Canvas,
     DISABLED,
     END,
     LEFT,
@@ -40,6 +41,7 @@ from tkinter import (
     messagebox,
     ttk,
 )
+from zoneinfo import ZoneInfo, available_timezones
 
 
 APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
@@ -51,6 +53,8 @@ LEGACY_TIME_FORMAT = "%Y-%m-%d %H:%M"
 CLOCK_FORMAT = "%H:%M"
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 INTERVAL_UNITS = ["seconds", "minutes", "hours"]
+TIME_ZONES = sorted(available_timezones())
+DEFAULT_TIME_ZONE = "Pacific/Auckland" if "Pacific/Auckland" in TIME_ZONES else "UTC"
 
 
 @dataclass
@@ -67,6 +71,7 @@ class Job:
     schedule_time: str = "09:00"
     weekday: int = 0
     month_day: int = 1
+    timezone: str = DEFAULT_TIME_ZONE
     working_dir: str = ""
     enabled: bool = True
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
@@ -131,6 +136,7 @@ class JobStore:
         clean.setdefault("schedule_time", "09:00")
         clean.setdefault("weekday", 0)
         clean.setdefault("month_day", 1)
+        clean.setdefault("timezone", item.get("timezone", DEFAULT_TIME_ZONE))
         clean.setdefault("working_dir", item.get("working_dir", ""))
         clean.setdefault("enabled", True)
         clean.setdefault("last_status", "Not run yet")
@@ -140,6 +146,33 @@ class JobStore:
         clean.setdefault("last_exit_code", None)
         clean.setdefault("id", uuid.uuid4().hex)
         return clean
+
+
+class ScrollableFrame(Frame):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.canvas = Canvas(self, borderwidth=0, highlightthickness=0)
+        self.scrollbar = Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.inner = Frame(self.canvas)
+        self.inner_id = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
+
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.pack(side=LEFT, fill=BOTH, expand=True)
+        self.scrollbar.pack(side=RIGHT, fill=Y)
+
+        self.inner.bind("<Configure>", self._sync_scroll_region)
+        self.canvas.bind("<Configure>", self._sync_inner_width)
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self.inner.bind("<MouseWheel>", self._on_mousewheel)
+
+    def _sync_scroll_region(self, _event=None) -> None:
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _sync_inner_width(self, event) -> None:
+        self.canvas.itemconfigure(self.inner_id, width=event.width)
+
+    def _on_mousewheel(self, event) -> None:
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
 
 class Scheduler:
@@ -296,10 +329,13 @@ class JobDialog(Toplevel):
         self.time_var = StringVar(value=job.schedule_time if job else "09:00")
         self.weekday_var = StringVar(value=WEEKDAYS[job.weekday] if job else WEEKDAYS[0])
         self.month_day_var = StringVar(value=str(job.month_day if job else 1))
+        self.timezone_var = StringVar(value=job.timezone if job else DEFAULT_TIME_ZONE)
         self.working_dir_var = StringVar(value=job.working_dir if job else "")
         self.enabled_var = BooleanVar(value=job.enabled if job else True)
 
-        container = Frame(self, padx=14, pady=14)
+        scroller = ScrollableFrame(self)
+        scroller.pack(fill=BOTH, expand=True)
+        container = Frame(scroller.inner, padx=14, pady=14)
         container.pack(fill=BOTH, expand=True)
 
         self._add_labeled_entry(container, "Name", self.name_var, 52)
@@ -350,6 +386,13 @@ class JobDialog(Toplevel):
         Entry(schedule_box, textvariable=self.run_at_var, width=18).grid(row=3, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         Label(schedule_box, text="Time format: HH:MM; one-time format: YYYY-MM-DD HH:MM:SS").grid(
             row=4, column=1, columnspan=3, sticky="w", pady=(4, 0)
+        )
+
+        timezone_frame = Frame(container)
+        timezone_frame.pack(fill=BOTH, pady=(10, 0))
+        Label(timezone_frame, text="Schedule Time Zone").pack(anchor="w")
+        ttk.Combobox(timezone_frame, textvariable=self.timezone_var, values=TIME_ZONES, state="readonly").pack(
+            fill=BOTH, expand=True, pady=(4, 0)
         )
 
         end_frame = Frame(container)
@@ -451,6 +494,7 @@ class JobDialog(Toplevel):
             schedule_time=self.time_var.get().strip(),
             weekday=WEEKDAYS.index(self.weekday_var.get()),
             month_day=month_day,
+            timezone=self.timezone_var.get() or DEFAULT_TIME_ZONE,
             working_dir=self.working_dir_var.get().strip(),
             enabled=self.enabled_var.get(),
             next_run="",
@@ -557,16 +601,24 @@ class SchedulerApp:
         self.tree.bind("<Double-1>", lambda _event: self._edit_job())
         self.tree.bind("<Configure>", self._resize_tree_columns)
 
-        scroll = Scrollbar(left, orient="vertical", command=self.tree.yview)
-        scroll.grid(row=0, column=1, sticky="ns")
-        self.tree.configure(yscrollcommand=scroll.set)
+        tree_y_scroll = Scrollbar(left, orient="vertical", command=self.tree.yview)
+        tree_y_scroll.grid(row=0, column=1, sticky="ns")
+        tree_x_scroll = Scrollbar(left, orient="horizontal", command=self.tree.xview)
+        tree_x_scroll.grid(row=1, column=0, sticky="ew")
+        self.tree.configure(yscrollcommand=tree_y_scroll.set, xscrollcommand=tree_x_scroll.set)
 
         Label(right, text="Job Details", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
         self.detail = Text(right, height=16, wrap="word", state=DISABLED)
         self.detail.grid(row=1, column=0, sticky="nsew", pady=(8, 12))
+        detail_scroll = Scrollbar(right, orient="vertical", command=self.detail.yview)
+        detail_scroll.grid(row=1, column=1, sticky="ns", pady=(8, 12))
+        self.detail.configure(yscrollcommand=detail_scroll.set)
         Label(right, text="Recent Logs", font=("Segoe UI", 12, "bold")).grid(row=2, column=0, sticky="w")
         self.log_list = Listbox(right, height=8)
         self.log_list.grid(row=3, column=0, sticky="nsew", pady=(8, 0))
+        log_scroll = Scrollbar(right, orient="vertical", command=self.log_list.yview)
+        log_scroll.grid(row=3, column=1, sticky="ns", pady=(8, 0))
+        self.log_list.configure(yscrollcommand=log_scroll.set)
         Button(right, text="Open Selected Log", command=self._open_selected_log).grid(row=4, column=0, sticky="e", pady=(8, 0))
 
     def _resize_tree_columns(self, _event=None) -> None:
@@ -630,6 +682,7 @@ class SchedulerApp:
                 f"Arguments: {job.python_args or '(none)'}",
                 f"Command: {build_display_command(job)}",
                 f"Schedule: {describe_schedule(job)}",
+                f"Time Zone: {job.timezone}",
                 f"End Time: {job.end_at or '(none)'}",
                 f"Working Directory: {job.working_dir or str(Path(job.python_file).parent)}",
                 f"Next Run: {job.next_run or '-'}",
@@ -860,37 +913,50 @@ def install_startup_launcher() -> Path:
 
 def calculate_next_run(job: Job, now: datetime) -> datetime:
     if job.mode == "once":
-        return parse_datetime(job.run_at) or now
+        run_at = parse_datetime(job.run_at)
+        return timezone_datetime_to_local(run_at, job) if run_at else now
     if job.mode == "interval":
         interval = build_interval_delta(job)
         candidate = now + interval
         return candidate.replace(microsecond=0)
     if job.mode == "weekly":
-        return next_weekly_run(job.weekday, job.schedule_time, now)
+        return next_weekly_run_for_zone(job.weekday, job.schedule_time, now, job.timezone)
     if job.mode == "monthly":
-        return next_monthly_run(job.month_day, job.schedule_time, now)
+        return next_monthly_run_for_zone(job.month_day, job.schedule_time, now, job.timezone)
     return now
 
 
 def next_weekly_run(weekday: int, clock_text: str, now: datetime) -> datetime:
+    return next_weekly_run_for_zone(weekday, clock_text, now, DEFAULT_TIME_ZONE)
+
+
+def next_weekly_run_for_zone(weekday: int, clock_text: str, now: datetime, timezone_name: str) -> datetime:
+    zone = get_zone(timezone_name)
+    zone_now = local_naive_to_aware(now).astimezone(zone)
     hour, minute = parse_clock(clock_text) or (9, 0)
-    days_ahead = (weekday - now.weekday()) % 7
-    candidate = (now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if candidate <= now:
+    days_ahead = (weekday - zone_now.weekday()) % 7
+    candidate = (zone_now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if candidate <= zone_now:
         candidate += timedelta(days=7)
-    return candidate
+    return aware_to_local_naive(candidate)
 
 
 def next_monthly_run(month_day: int, clock_text: str, now: datetime) -> datetime:
+    return next_monthly_run_for_zone(month_day, clock_text, now, DEFAULT_TIME_ZONE)
+
+
+def next_monthly_run_for_zone(month_day: int, clock_text: str, now: datetime, timezone_name: str) -> datetime:
+    zone = get_zone(timezone_name)
+    zone_now = local_naive_to_aware(now).astimezone(zone)
     hour, minute = parse_clock(clock_text) or (9, 0)
-    year = now.year
-    month = now.month
+    year = zone_now.year
+    month = zone_now.month
     for _ in range(24):
         last_day = calendar.monthrange(year, month)[1]
         if month_day <= last_day:
-            candidate = datetime(year, month, month_day, hour, minute)
-            if candidate > now:
-                return candidate
+            candidate = datetime(year, month, month_day, hour, minute, tzinfo=zone)
+            if candidate > zone_now:
+                return aware_to_local_naive(candidate)
         month += 1
         if month > 12:
             month = 1
@@ -900,13 +966,13 @@ def next_monthly_run(month_day: int, clock_text: str, now: datetime) -> datetime
 
 def describe_schedule(job: Job) -> str:
     if job.mode == "weekly":
-        return f"Weekly on {WEEKDAYS[job.weekday]} at {job.schedule_time}"
+        return f"Weekly on {WEEKDAYS[job.weekday]} at {job.schedule_time} ({job.timezone})"
     if job.mode == "monthly":
-        return f"Monthly on day {job.month_day} at {job.schedule_time}"
+        return f"Monthly on day {job.month_day} at {job.schedule_time} ({job.timezone})"
     if job.mode == "interval":
         return f"Every {job.interval_minutes} {job.interval_unit}"
     if job.mode == "once":
-        return f"Once: {job.run_at}"
+        return f"Once: {job.run_at} ({job.timezone})"
     return job.mode
 
 
@@ -921,11 +987,35 @@ def parse_datetime(value: str) -> datetime | None:
     return None
 
 
+def get_zone(timezone_name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(timezone_name)
+    except Exception:
+        return ZoneInfo(DEFAULT_TIME_ZONE)
+
+
+def local_naive_to_aware(value: datetime) -> datetime:
+    if value.tzinfo:
+        return value.astimezone()
+    return value.astimezone()
+
+
+def aware_to_local_naive(value: datetime) -> datetime:
+    return value.astimezone().replace(tzinfo=None)
+
+
+def timezone_datetime_to_local(value: datetime, job: Job) -> datetime:
+    if value.tzinfo:
+        return aware_to_local_naive(value)
+    zoned = value.replace(tzinfo=get_zone(job.timezone))
+    return aware_to_local_naive(zoned)
+
+
 def is_job_past_end(job: Job, when: datetime | None = None) -> bool:
     end_at = parse_datetime(job.end_at)
     if not end_at:
         return False
-    return (when or datetime.now()) > end_at
+    return (when or datetime.now()) > timezone_datetime_to_local(end_at, job)
 
 
 def parse_clock(value: str) -> tuple[int, int] | None:
