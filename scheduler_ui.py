@@ -54,7 +54,96 @@ CLOCK_FORMAT = "%H:%M:%S"
 LEGACY_CLOCK_FORMAT = "%H:%M"
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 INTERVAL_UNITS = ["seconds", "minutes", "hours"]
-TIME_ZONES = sorted(available_timezones())
+COMMON_TIME_ZONES = [
+    "UTC",
+    "Pacific/Auckland",
+    "Pacific/Chatham",
+    "Pacific/Fiji",
+    "Pacific/Guam",
+    "Pacific/Honolulu",
+    "Pacific/Pago_Pago",
+    "Pacific/Tahiti",
+    "Australia/Adelaide",
+    "Australia/Brisbane",
+    "Australia/Darwin",
+    "Australia/Hobart",
+    "Australia/Melbourne",
+    "Australia/Perth",
+    "Australia/Sydney",
+    "Asia/Amman",
+    "Asia/Bahrain",
+    "Asia/Bangkok",
+    "Asia/Beirut",
+    "Asia/Dhaka",
+    "Asia/Dubai",
+    "Asia/Ho_Chi_Minh",
+    "Asia/Hong_Kong",
+    "Asia/Jakarta",
+    "Asia/Jerusalem",
+    "Asia/Karachi",
+    "Asia/Kathmandu",
+    "Asia/Kolkata",
+    "Asia/Kuala_Lumpur",
+    "Asia/Kuwait",
+    "Asia/Manila",
+    "Asia/Muscat",
+    "Asia/Qatar",
+    "Asia/Riyadh",
+    "Asia/Seoul",
+    "Asia/Shanghai",
+    "Asia/Singapore",
+    "Asia/Taipei",
+    "Asia/Tehran",
+    "Asia/Tokyo",
+    "Asia/Yangon",
+    "Europe/Amsterdam",
+    "Europe/Athens",
+    "Europe/Berlin",
+    "Europe/Brussels",
+    "Europe/Bucharest",
+    "Europe/Budapest",
+    "Europe/Copenhagen",
+    "Europe/Dublin",
+    "Europe/Helsinki",
+    "Europe/Istanbul",
+    "Europe/Lisbon",
+    "Europe/London",
+    "Europe/Madrid",
+    "Europe/Moscow",
+    "Europe/Oslo",
+    "Europe/Paris",
+    "Europe/Prague",
+    "Europe/Rome",
+    "Europe/Stockholm",
+    "Europe/Vienna",
+    "Europe/Warsaw",
+    "Europe/Zurich",
+    "Africa/Cairo",
+    "Africa/Casablanca",
+    "Africa/Johannesburg",
+    "Africa/Lagos",
+    "Africa/Nairobi",
+    "Africa/Tunis",
+    "America/Anchorage",
+    "America/Argentina/Buenos_Aires",
+    "America/Bogota",
+    "America/Caracas",
+    "America/Chicago",
+    "America/Denver",
+    "America/Guatemala",
+    "America/Halifax",
+    "America/Lima",
+    "America/Los_Angeles",
+    "America/Mexico_City",
+    "America/New_York",
+    "America/Phoenix",
+    "America/Santiago",
+    "America/Sao_Paulo",
+    "America/St_Johns",
+    "America/Toronto",
+    "America/Vancouver",
+]
+TIME_ZONES = sorted(set(available_timezones()) | set(COMMON_TIME_ZONES))
 DEFAULT_TIME_ZONE = "Pacific/Auckland" if "Pacific/Auckland" in TIME_ZONES else "UTC"
 
 
@@ -163,8 +252,8 @@ class ScrollableFrame(Frame):
 
         self.inner.bind("<Configure>", self._sync_scroll_region)
         self.canvas.bind("<Configure>", self._sync_inner_width)
-        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
-        self.inner.bind("<MouseWheel>", self._on_mousewheel)
+        self.bind("<Enter>", self._bind_mousewheel)
+        self.bind("<Leave>", self._unbind_mousewheel)
 
     def _sync_scroll_region(self, _event=None) -> None:
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -174,6 +263,23 @@ class ScrollableFrame(Frame):
 
     def _on_mousewheel(self, event) -> None:
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def _bind_mousewheel(self, _event=None) -> None:
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    def _unbind_mousewheel(self, _event=None) -> None:
+        self.canvas.unbind_all("<MouseWheel>")
+
+
+def bind_hover_mousewheel(widget, handler) -> None:
+    def bind(_event=None):
+        widget.bind_all("<MouseWheel>", handler)
+
+    def unbind(_event=None):
+        widget.unbind_all("<MouseWheel>")
+
+    widget.bind("<Enter>", bind)
+    widget.bind("<Leave>", unbind)
 
 
 class Scheduler:
@@ -607,6 +713,7 @@ class SchedulerApp:
         tree_x_scroll = Scrollbar(left, orient="horizontal", command=self.tree.xview)
         tree_x_scroll.grid(row=1, column=0, sticky="ew")
         self.tree.configure(yscrollcommand=tree_y_scroll.set, xscrollcommand=tree_x_scroll.set)
+        bind_hover_mousewheel(self.tree, lambda event: self.tree.yview_scroll(int(-1 * (event.delta / 120)), "units"))
 
         Label(right, text="Job Details", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
         self.detail = Text(right, height=16, wrap="word", state=DISABLED)
@@ -614,12 +721,14 @@ class SchedulerApp:
         detail_scroll = Scrollbar(right, orient="vertical", command=self.detail.yview)
         detail_scroll.grid(row=1, column=1, sticky="ns", pady=(8, 12))
         self.detail.configure(yscrollcommand=detail_scroll.set)
+        bind_hover_mousewheel(self.detail, lambda event: self.detail.yview_scroll(int(-1 * (event.delta / 120)), "units"))
         Label(right, text="Recent Logs", font=("Segoe UI", 12, "bold")).grid(row=2, column=0, sticky="w")
         self.log_list = Listbox(right, height=8)
         self.log_list.grid(row=3, column=0, sticky="nsew", pady=(8, 0))
         log_scroll = Scrollbar(right, orient="vertical", command=self.log_list.yview)
         log_scroll.grid(row=3, column=1, sticky="ns", pady=(8, 0))
         self.log_list.configure(yscrollcommand=log_scroll.set)
+        bind_hover_mousewheel(self.log_list, lambda event: self.log_list.yview_scroll(int(-1 * (event.delta / 120)), "units"))
         Button(right, text="Open Selected Log", command=self._open_selected_log).grid(row=4, column=0, sticky="e", pady=(8, 0))
 
     def _resize_tree_columns(self, _event=None) -> None:

@@ -88,7 +88,7 @@ The same EXE can run the hidden background agent:
 - Select an IANA timezone for country/region-specific schedule times.
 - Set a working directory; blank uses the selected file folder.
 - Run now, enable, disable, edit, and delete jobs.
-- Scrollbars are available for the job table, job details, logs, and job editor.
+- Scrollbars and mouse-wheel scrolling are available for the job table, job details, logs, and job editor.
 - Background agent keeps schedules running after the UI closes.
 - Startup launcher can relaunch the background agent after reboot/login.
 - Execution output is saved in `logs/`.
