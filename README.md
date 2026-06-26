@@ -74,8 +74,8 @@ The same EXE can run the hidden background agent:
 
 ## Schedule Options
 
-- `Weekly`: choose a weekday and time, such as Monday at `09:00`.
-- `Monthly`: choose a day of the month and time, such as day 5 at `18:30`.
+- `Weekly`: choose a weekday and time, such as Monday at `09:00:30`.
+- `Monthly`: choose a day of the month and time, such as day 5 at `18:30:15`.
 - `Every`: run at a fixed interval in seconds, minutes, or hours.
 - `Run once`: use `YYYY-MM-DD HH:MM:SS`; the job disables itself after it runs.
 - `Schedule Time Zone`: weekly, monthly, run-once, and end-time fields are interpreted in the selected timezone.

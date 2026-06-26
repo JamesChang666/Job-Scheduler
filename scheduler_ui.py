@@ -50,7 +50,8 @@ LOG_DIR = APP_DIR / "logs"
 AGENT_PID_FILE = APP_DIR / "scheduler_agent.pid"
 TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 LEGACY_TIME_FORMAT = "%Y-%m-%d %H:%M"
-CLOCK_FORMAT = "%H:%M"
+CLOCK_FORMAT = "%H:%M:%S"
+LEGACY_CLOCK_FORMAT = "%H:%M"
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 INTERVAL_UNITS = ["seconds", "minutes", "hours"]
 TIME_ZONES = sorted(available_timezones())
@@ -68,7 +69,7 @@ class Job:
     interval_unit: str = "minutes"
     run_at: str = ""
     end_at: str = ""
-    schedule_time: str = "09:00"
+    schedule_time: str = "09:00:00"
     weekday: int = 0
     month_day: int = 1
     timezone: str = DEFAULT_TIME_ZONE
@@ -133,7 +134,7 @@ class JobStore:
         clean.setdefault("interval_unit", item.get("interval_unit", "minutes"))
         clean.setdefault("run_at", item.get("run_at", ""))
         clean.setdefault("end_at", item.get("end_at", ""))
-        clean.setdefault("schedule_time", "09:00")
+        clean.setdefault("schedule_time", "09:00:00")
         clean.setdefault("weekday", 0)
         clean.setdefault("month_day", 1)
         clean.setdefault("timezone", item.get("timezone", DEFAULT_TIME_ZONE))
@@ -326,7 +327,7 @@ class JobDialog(Toplevel):
         self.interval_unit_var = StringVar(value=job.interval_unit if job else "minutes")
         self.run_at_var = StringVar(value=job.run_at if job and job.run_at else datetime.now().strftime(TIME_FORMAT))
         self.end_at_var = StringVar(value=job.end_at if job else "")
-        self.time_var = StringVar(value=job.schedule_time if job else "09:00")
+        self.time_var = StringVar(value=job.schedule_time if job else "09:00:00")
         self.weekday_var = StringVar(value=WEEKDAYS[job.weekday] if job else WEEKDAYS[0])
         self.month_day_var = StringVar(value=str(job.month_day if job else 1))
         self.timezone_var = StringVar(value=job.timezone if job else DEFAULT_TIME_ZONE)
@@ -384,7 +385,7 @@ class JobDialog(Toplevel):
             row=3, column=0, sticky="w", pady=(8, 0)
         )
         Entry(schedule_box, textvariable=self.run_at_var, width=18).grid(row=3, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(8, 0))
-        Label(schedule_box, text="Time format: HH:MM; one-time format: YYYY-MM-DD HH:MM:SS").grid(
+        Label(schedule_box, text="Time format: HH:MM:SS; one-time format: YYYY-MM-DD HH:MM:SS").grid(
             row=4, column=1, columnspan=3, sticky="w", pady=(4, 0)
         )
 
@@ -464,7 +465,7 @@ class JobDialog(Toplevel):
             messagebox.showerror("Invalid Time Format", f"Use the {TIME_FORMAT} format.", parent=self)
             return
         if mode in {"weekly", "monthly"} and not parse_clock(self.time_var.get().strip()):
-            messagebox.showerror("Invalid Time Format", "Weekly and monthly schedules must use HH:MM.", parent=self)
+            messagebox.showerror("Invalid Time Format", "Weekly and monthly schedules must use HH:MM:SS.", parent=self)
             return
         end_at = self.end_at_var.get().strip()
         if end_at and not parse_datetime(end_at):
@@ -933,9 +934,9 @@ def next_weekly_run(weekday: int, clock_text: str, now: datetime) -> datetime:
 def next_weekly_run_for_zone(weekday: int, clock_text: str, now: datetime, timezone_name: str) -> datetime:
     zone = get_zone(timezone_name)
     zone_now = local_naive_to_aware(now).astimezone(zone)
-    hour, minute = parse_clock(clock_text) or (9, 0)
+    hour, minute, second = parse_clock(clock_text) or (9, 0, 0)
     days_ahead = (weekday - zone_now.weekday()) % 7
-    candidate = (zone_now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    candidate = (zone_now + timedelta(days=days_ahead)).replace(hour=hour, minute=minute, second=second, microsecond=0)
     if candidate <= zone_now:
         candidate += timedelta(days=7)
     return aware_to_local_naive(candidate)
@@ -948,13 +949,13 @@ def next_monthly_run(month_day: int, clock_text: str, now: datetime) -> datetime
 def next_monthly_run_for_zone(month_day: int, clock_text: str, now: datetime, timezone_name: str) -> datetime:
     zone = get_zone(timezone_name)
     zone_now = local_naive_to_aware(now).astimezone(zone)
-    hour, minute = parse_clock(clock_text) or (9, 0)
+    hour, minute, second = parse_clock(clock_text) or (9, 0, 0)
     year = zone_now.year
     month = zone_now.month
     for _ in range(24):
         last_day = calendar.monthrange(year, month)[1]
         if month_day <= last_day:
-            candidate = datetime(year, month, month_day, hour, minute, tzinfo=zone)
+            candidate = datetime(year, month, month_day, hour, minute, second, tzinfo=zone)
             if candidate > zone_now:
                 return aware_to_local_naive(candidate)
         month += 1
@@ -1018,12 +1019,14 @@ def is_job_past_end(job: Job, when: datetime | None = None) -> bool:
     return (when or datetime.now()) > timezone_datetime_to_local(end_at, job)
 
 
-def parse_clock(value: str) -> tuple[int, int] | None:
-    try:
-        parsed = datetime.strptime(value, CLOCK_FORMAT)
-        return parsed.hour, parsed.minute
-    except ValueError:
-        return None
+def parse_clock(value: str) -> tuple[int, int, int] | None:
+    for clock_format in (CLOCK_FORMAT, LEGACY_CLOCK_FORMAT):
+        try:
+            parsed = datetime.strptime(value, clock_format)
+            return parsed.hour, parsed.minute, parsed.second
+        except ValueError:
+            continue
+    return None
 
 
 def format_time(value: datetime) -> str:
