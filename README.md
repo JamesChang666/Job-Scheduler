@@ -31,7 +31,7 @@ This installs `tzdata`, which gives Python full timezone support on Windows.
    - `Every` seconds/minutes/hours
    - `Run once`
 7. Choose `Schedule Time Zone`, such as `Pacific/Auckland`, `Asia/Taipei`, or `America/New_York`.
-   - Use `Reset` to return to the default timezone.
+   - Use `Reset` to return to the computer's current local timezone.
 8. Optional: set `End Time` to stop a repeating job after a date/time.
 9. Click `Save`.
 10. Use `Run Now` to test immediately.
@@ -91,6 +91,7 @@ The same EXE can run the hidden background agent:
 - `Every`: run at a fixed interval in seconds, minutes, or hours.
 - `Run once`: use `YYYY-MM-DD HH:MM:SS`; the job disables itself after it runs.
 - `Schedule Time Zone`: weekly, monthly, run-once, and end-time fields are interpreted in the selected timezone.
+  New jobs default to the computer's current local timezone.
 
 ## Features
 

@@ -144,7 +144,68 @@ COMMON_TIME_ZONES = [
     "America/Vancouver",
 ]
 TIME_ZONES = sorted(set(available_timezones()) | set(COMMON_TIME_ZONES))
-DEFAULT_TIME_ZONE = "Pacific/Auckland" if "Pacific/Auckland" in TIME_ZONES else "UTC"
+WINDOWS_TIME_ZONE_MAP = {
+    "UTC": "UTC",
+    "Taipei Standard Time": "Asia/Taipei",
+    "China Standard Time": "Asia/Shanghai",
+    "Singapore Standard Time": "Asia/Singapore",
+    "Tokyo Standard Time": "Asia/Tokyo",
+    "Korea Standard Time": "Asia/Seoul",
+    "New Zealand Standard Time": "Pacific/Auckland",
+    "Chatham Islands Standard Time": "Pacific/Chatham",
+    "AUS Eastern Standard Time": "Australia/Sydney",
+    "E. Australia Standard Time": "Australia/Brisbane",
+    "Cen. Australia Standard Time": "Australia/Adelaide",
+    "W. Australia Standard Time": "Australia/Perth",
+    "GMT Standard Time": "Europe/London",
+    "W. Europe Standard Time": "Europe/Berlin",
+    "Romance Standard Time": "Europe/Paris",
+    "Central Europe Standard Time": "Europe/Budapest",
+    "Eastern Standard Time": "America/New_York",
+    "Central Standard Time": "America/Chicago",
+    "Mountain Standard Time": "America/Denver",
+    "Pacific Standard Time": "America/Los_Angeles",
+}
+
+
+def detect_local_timezone_name() -> str:
+    try:
+        result = subprocess.run(["tzutil", "/g"], capture_output=True, text=True, timeout=2)
+        windows_name = result.stdout.strip()
+        mapped_name = WINDOWS_TIME_ZONE_MAP.get(windows_name)
+        if mapped_name in TIME_ZONES:
+            return mapped_name
+    except Exception:
+        pass
+
+    local_samples = [
+        datetime.now(),
+        datetime(datetime.now().year, 1, 15, 12, 0, 0),
+        datetime(datetime.now().year, 7, 15, 12, 0, 0),
+    ]
+    local_signature = tuple(
+        sample.astimezone().utcoffset()
+        for sample in local_samples
+    )
+    preferred_zones = [zone for zone in COMMON_TIME_ZONES if zone in TIME_ZONES]
+    preferred_zones.extend(zone for zone in TIME_ZONES if zone not in preferred_zones)
+
+    for zone_name in preferred_zones:
+        try:
+            zone = ZoneInfo(zone_name)
+            zone_signature = tuple(
+                sample.replace(tzinfo=zone).utcoffset()
+                for sample in local_samples
+            )
+        except Exception:
+            continue
+        if zone_signature == local_signature:
+            return zone_name
+
+    return "UTC"
+
+
+DEFAULT_TIME_ZONE = detect_local_timezone_name()
 
 
 @dataclass
@@ -377,6 +438,7 @@ class Scheduler:
                 process = subprocess.Popen(
                     process_command,
                     cwd=cwd if cwd and os.path.isdir(cwd) else None,
+                    env=build_job_environment(job),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
@@ -946,6 +1008,14 @@ def build_process_command(job: Job) -> list[str]:
     if job.file_type == "exe":
         return [job.python_file, *args]
     return [python_console_executable(), job.python_file, *args]
+
+
+def build_job_environment(job: Job) -> dict[str, str]:
+    env = os.environ.copy()
+    if job.file_type == "python":
+        env["PYTHONUTF8"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
+    return env
 
 
 def build_display_command(job: Job) -> str:

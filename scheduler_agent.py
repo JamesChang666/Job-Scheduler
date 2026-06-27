@@ -12,6 +12,7 @@ from scheduler_ui import (
     Job,
     JobStore,
     build_display_command,
+    build_job_environment,
     build_process_command,
     calculate_next_run,
     format_time,
@@ -116,6 +117,7 @@ class BackgroundScheduler:
                 process = subprocess.Popen(
                     process_command,
                     cwd=cwd if cwd and os.path.isdir(cwd) else None,
+                    env=build_job_environment(job),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
